@@ -172,6 +172,24 @@ api.tabs.onRemoved.addListener(tabId => {
   try { api.storage.session.remove("t" + tabId); } catch {}
 });
 
+// ---------- Classroom: which Drive file did the viewer just open? ----------
+const DRIVE_ID = [
+  /\/drive\/v\d\w*\/files\/([\w-]{25,})/,
+  /\/file\/(?:u\/\d+\/)?d\/([\w-]{25,})/,
+  /[?&](?:id|docid|srcid|fileId)=([\w-]{25,})/,
+];
+api.webRequest.onBeforeRequest.addListener(details => {
+  if (details.tabId < 0 || !/^https:\/\/classroom\.google\.com/.test(details.initiator || details.documentUrl || "")) return;
+  if (/\/thumbnail|=s\d+|\/(photos?|avatar)/i.test(details.url)) return;   // thumbnails of every attachment
+  for (const re of DRIVE_ID) {
+    const m = details.url.match(re);
+    if (m) {
+      api.tabs.sendMessage(details.tabId, { type: "driveFile", id: m[1] }, { frameId: 0 }).catch(() => {});
+      return;
+    }
+  }
+}, { urls: ["*://*.google.com/*", "*://*.googleapis.com/*"], types: ["xmlhttprequest", "sub_frame", "other", "script"] });
+
 // ---------- popup messages ----------
 api.runtime.onMessage.addListener((msg, sender, reply) => {
   (async () => {

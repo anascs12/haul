@@ -220,23 +220,37 @@
   // recognised from the attachment link you click, and forgotten when the viewer closes.
   const IS_CLASSROOM = location.hostname === "classroom.google.com" && window === top;
   let classroomFile = null;
+  let lastPress = 0;
+  function openClassroomFile(f, name) {
+    if (classroomFile && classroomFile.id === f.id) return;
+    classroomFile = { ...f, name: (name || "").replace(/^((Attachment|PowerPoint|PDF|Word|Excel|Video|Image|Google \w+):\s*)+/i, "").slice(0, 120) };
+    console.debug("[Haul] Classroom file opened:", classroomFile.id, classroomFile.name);
+    setTimeout(refreshPageFile, 200);
+  }
   if (IS_CLASSROOM) {
-    document.addEventListener("click", e => {
+    // window + capture + pointerdown: runs before Classroom's own handlers can stop the event
+    const onPress = e => {
       if (!e.isTrusted || (host && e.composedPath().includes(host))) return;
+      lastPress = Date.now();
       const path = e.composedPath();
       const a = path.find(n => n.tagName === "A" && n.href);
       const f = a && fileFromUrl(a.href);
       if (f) {
-        const label = (a.getAttribute("aria-label") || a.getAttribute("title") || a.textContent || "").trim();
-        classroomFile = { ...f, name: label.replace(/^(Attachment|PowerPoint|PDF|Word|Excel|Google \w+):\s*/i, "").slice(0, 120) };
-        setTimeout(refreshPageFile, 300);
+        openClassroomFile(f, (a.getAttribute("aria-label") || a.getAttribute("title") || a.textContent || "").trim());
         return;
       }
       // the viewer's close button
-      if (classroomFile && path.some(n => n.getAttribute && /^(close|back)\b/i.test(n.getAttribute("aria-label") || ""))) {
+      if (e.type === "click" && classroomFile &&
+          path.some(n => n.getAttribute && /^(close|back)\b/i.test(n.getAttribute("aria-label") || ""))) {
         classroomFile = null; setTimeout(refreshPageFile, 50);
       }
-    }, true);
+    };
+    for (const type of ["pointerdown", "click"]) window.addEventListener(type, onPress, true);
+    window.addEventListener("keydown", e => { if (e.isTrusted && e.key === "Enter") lastPress = Date.now(); }, true);
+    // Backup: the background script sees the Drive requests the viewer makes for the file.
+    api.runtime.onMessage.addListener(msg => {
+      if (msg && msg.type === "driveFile" && Date.now() - lastPress < 10000) openClassroomFile({ type: "drive", id: msg.id }, "");
+    });
     document.addEventListener("keydown", e => {
       if (e.key === "Escape" && classroomFile && !menuOpen) { classroomFile = null; setTimeout(refreshPageFile, 50); }
     }, true);
@@ -261,7 +275,7 @@
   function pageView() {
     const f = pageFile, id = f.id;
     const tidy = t => t.replace(/ - Google (Drive|Docs|Sheets|Slides)$/, "");
-    const title = f.name || tidy(document.title || "");
+    const title = f.name || (IS_CLASSROOM ? "File from Classroom" : tidy(document.title || ""));
     const one = (label, detail, url) => ({ id: label, label, detail, url, kind: "http" });
     let options;
     if (f.type === "drive") {
