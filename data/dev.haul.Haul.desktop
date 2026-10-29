@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Haul
+GenericName=Download Manager
+Comment=Fast, resumable downloads of files, videos and torrents
+Exec=@LAUNCHER@ %U
+Icon=dev.haul.Haul
+Terminal=false
+Categories=Network;FileTransfer;GTK;
+Keywords=download;manager;torrent;magnet;video;youtube;aria2;yt-dlp;
+MimeType=x-scheme-handler/magnet;application/x-bittorrent;
+StartupNotify=true
+DBusActivatable=false
+SingleMainWindow=true

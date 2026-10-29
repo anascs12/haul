@@ -1,0 +1,41 @@
+#!/usr/bin/python3 -s
+"""Haul launcher.
+
+  haul [URL | magnet | file.torrent ...]   open Haul (adds the given links)
+  haul --background                        start without a window (used by the browser)
+  haul --install-ytdlp                     install or update yt-dlp, then exit
+  haul --setup-browsers                    register the browser extension host, then exit
+"""
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.realpath(__file__))))
+
+
+def cli():
+    if "--install-ytdlp" in sys.argv:
+        from haul import tools
+        try:
+            changed, msg = tools.install_ytdlp()
+        except Exception as e:
+            print("Could not install yt-dlp:", e, file=sys.stderr)
+            return 1
+        print(msg)
+        return 0
+    if "--setup-browsers" in sys.argv:
+        from haul import integration
+        ext_id, done = integration.register()
+        print("Extension id:", ext_id)
+        for name, path in done:
+            print(f"  {name}: {path}")
+        if not done:
+            print("  no supported browser profile found")
+        print("Extension folders:", integration.OUT / "chrome", "and", integration.OUT / "firefox")
+        return 0
+    from haul.ui import main
+    return main(sys.argv)
+
+
+if __name__ == "__main__":
+    sys.exit(cli())
