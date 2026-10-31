@@ -36,17 +36,17 @@ PART = ".haulpart"
 NETWORK_CODES = {"2", "6", "19"}            # timeout, network problem, DNS
 TRANSIENT_CODES = {"1", "5", "8", "22", "23", "29"}
 FATAL_MESSAGES = {
-    "3": "The server says this file does not exist.",
-    "4": "The server says this file does not exist.",
-    "9": "Not enough free disk space.",
-    "12": "This file is already being downloaded.",
-    "13": "A file with this name already exists.",
-    "15": "Could not open the file for writing.",
-    "16": "Could not write the file.",
-    "17": "Could not write the file.",
-    "18": "Could not create the download folder.",
-    "24": "The server wants a login.",
-    "26": "The torrent is not valid.",
+    "3": "The server says this file does not exist",
+    "4": "The server says this file does not exist",
+    "9": "Not enough free disk space",
+    "12": "This file is already being downloaded",
+    "13": "A file with this name already exists",
+    "15": "Could not open the file for writing",
+    "16": "Could not write the file",
+    "17": "Could not write the file",
+    "18": "Could not create the download folder",
+    "24": "The server wants a login",
+    "26": "The torrent is not valid",
 }
 NETWORK_RETRIES = 40                        # ~35 minutes of backoff: rides out a dropped Wi-Fi
 OTHER_RETRIES = 6
@@ -90,8 +90,10 @@ class Job:
     detail: str = ""
     retry_at: float = 0.0
     seeding: bool = False
+    bitfield: str = ""            # aria2 pieces received, for the segment map
+    pieces: int = 0
 
-    LIVE = ("speed", "eta", "detail", "retry_at", "seeding")
+    LIVE = ("speed", "eta", "detail", "retry_at", "seeding", "bitfield", "pieces")
 
     def stored(self):
         d = asdict(self)
@@ -537,7 +539,7 @@ class Manager:
             polled = [j for j in self.jobs.values() if j.gid and (j.status == "active" or j.seeding)]
         if not polled:
             return
-        keys = ["status", "totalLength", "completedLength", "downloadSpeed", "connections",
+        keys = ["status", "totalLength", "completedLength", "downloadSpeed", "connections", "bitfield", "numPieces",
                 "errorCode", "errorMessage", "followedBy", "bittorrent", "numSeeders", "files"]
         try:
             results = self.aria.multicall([("aria2.tellStatus", j.gid, keys) for j in polled])
@@ -582,6 +584,8 @@ class Manager:
                 job.detail = f"{c} connection{'s' if c != 1 else ''}" if c else "Connecting…"
             if total:
                 job.size = total
+            if st.get("bitfield") and (job.kind != "torrent" or bt.get("info")):
+                job.bitfield, job.pieces = st["bitfield"], int(st.get("numPieces", 0))
             if job.status == "active" or not job.seeding:
                 job.done = done
             job.speed = speed
@@ -711,6 +715,7 @@ class Manager:
 
     def _finish(self, job, path):
         job.status, job.path, job.finished = "done", path, time.time()
+        job.bitfield, job.pieces = "", 0
         job.speed, job.eta, job.detail, job.error, job.retries = 0, -1, "", "", 0
         if job.size == 0:
             job.size = job.done
@@ -735,23 +740,26 @@ class Manager:
             self.store.save(job)
             return
         if code in FATAL_MESSAGES:
-            self._fail(job, FATAL_MESSAGES[code] + (f" ({message})" if message else ""))
+            _log(f"{job.name}: aria2 error {code}: {message}")
+            self._fail(job, FATAL_MESSAGES[code])
             return
         if "403" in low or "401" in low:
             self._fail(job, "The server refused the download (the link may have expired). "
                             "Start it again from the web page.")
             return
         budget = NETWORK_RETRIES if code in NETWORK_CODES else OTHER_RETRIES
+        _log(f"{job.name}: aria2 error {code}: {message}")
+        plain = "Connection problem" if code in NETWORK_CODES else "The server had a problem"
         if code in NETWORK_CODES or code in TRANSIENT_CODES:
             if job.retries < budget:
                 job.retries += 1
                 job.options["fail_done"] = job.done
                 delay = min(60, 2 ** min(job.retries, 6))
                 job.status, job.retry_at, job.speed, job.eta = "queued", time.time() + delay, 0, -1
-                job.error = message
+                job.error = plain
                 self.store.save(job)
                 return
-        self._fail(job, message or f"Download failed (aria2 error {code}).")
+        self._fail(job, f"{plain}. It kept failing after several tries, so try it again later")
 
     # ---------- helpers ----------
 

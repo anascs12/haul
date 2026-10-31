@@ -99,7 +99,9 @@ check("second copy gets a unique name", j["status"] == "done" and j["name"] == "
 # ---- pause / resume mid-download ----
 jid = mgr.add(BASE + "/file.bin?rate=150000", "http", "slow.bin", options={"resumable": True})
 time.sleep(3)
-before = mgr.get(jid)["done"]
+running = mgr.get(jid)
+check("piece map reported while downloading", running["pieces"] == 48 and len(running["bitfield"]) >= 12, running["pieces"])
+before = running["done"]
 mgr.pause(jid)
 time.sleep(1.5)
 paused = mgr.get(jid)

@@ -43,8 +43,8 @@ The extension then:
 * asks **where to save** in a small window. Haul learns the folder you use for each type
   (Video, Music, Compressed, Programs, Documents, Images, Other), preselects it next time,
   and can save a type there without asking (**Settings → Folders**);
-* shows a small **progress window** per download (speed, time left, Pause, Cancel, then
-  Open / Open Folder);
+* shows a small **progress window** per download with a segment map of the pieces each
+  connection has delivered (plus speed, time left, Pause, Cancel, then Open / Open Folder);
 * adds a **Download** pill (bottom-right) to files opened in **Google Classroom** and Drive,
   to **Google Docs / Sheets / Slides** (export as PDF, Word, Excel, CSV, PowerPoint, text)
   and to PDFs, images, audio and video opened directly in a tab;

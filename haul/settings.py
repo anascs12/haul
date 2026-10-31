@@ -13,8 +13,8 @@ DEFAULTS = {
     "connections": 16,             # connections per file (aria2 caps at 16 per server)
     "speed_limit_kib": 0,          # 0 = unlimited
     "ask_before_browser_download": True,
-    "ask_where_to_save": True,
-    "progress_window": True,       # IDM-style popup per browser download       # IDM-style save dialog for in-page button downloads
+    "ask_where_to_save": True,     # IDM-style save dialog for in-page button downloads
+    "progress_window": True,       # IDM-style popup per browser download
     "recent_dirs": [],
     "type_dirs": {},               # learned: file type -> folder last saved to
     "type_auto": {},               # file type -> save there without asking

@@ -27,42 +27,45 @@
     root.innerHTML = `
 <style>
   :host { all: initial; }
-  .wrap { position: fixed; display: none; flex-direction: column; align-items: flex-end; gap: 6px;
-    font: 500 13px/1.3 system-ui, "Cantarell", "Ubuntu", "Segoe UI", sans-serif; color: #fff;
-    opacity: 0; transform: translateY(-4px); transition: opacity .15s ease, transform .15s ease; }
+  .wrap { position: fixed; display: none; flex-direction: column; align-items: flex-end; gap: 8px;
+    font: 500 13px/20px system-ui, "Cantarell", "Ubuntu", "Segoe UI", sans-serif; color: #ededed;
+    opacity: 0; transform: translateY(-6px);
+    transition: opacity .18s cubic-bezier(.22,1,.36,1), transform .18s cubic-bezier(.22,1,.36,1); }
   .wrap.show { opacity: 1; transform: none; }
   .wrap.page { flex-direction: column-reverse; }
-  .btn { all: unset; display: inline-flex; align-items: center; gap: 7px; cursor: pointer; white-space: nowrap;
-    padding: 6px 12px 6px 7px; border-radius: 999px; background: rgba(18,18,20,.78);
-    backdrop-filter: blur(12px) saturate(1.4); -webkit-backdrop-filter: blur(12px) saturate(1.4);
-    box-shadow: 0 2px 10px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.12); }
-  .btn:hover { background: rgba(32,32,36,.9); }
+  .btn { all: unset; display: inline-flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap;
+    padding: 6px 12px 6px 6px; border-radius: 10px; background: #19191b;
+    box-shadow: 0 8px 24px rgba(0,0,0,.24), inset 0 0 0 1px rgba(237,237,237,.08);
+    transition: background-color .15s cubic-bezier(.22,1,.36,1), transform .15s cubic-bezier(.22,1,.36,1); }
+  .btn:hover { background: #232325; }
+  .btn:active { transform: scale(.98); }
   .btn:focus-visible { outline: 2px solid #62a0ea; outline-offset: 2px; }
-  .dot { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
-    background: #3584e4; color: #fff; flex: none; }
-  .btn.ok .dot { background: #2ec27e; }
-  .menu { min-width: 250px; max-width: 320px; max-height: min(360px, 60vh); overflow-y: auto; padding: 6px;
-    border-radius: 14px; background: rgba(18,18,20,.92); backdrop-filter: blur(16px) saturate(1.4);
-    -webkit-backdrop-filter: blur(16px) saturate(1.4);
-    box-shadow: 0 8px 28px rgba(0,0,0,.45), inset 0 0 0 1px rgba(255,255,255,.1); }
+  .dot { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 4px;
+    background: #1c71d8; color: #fff; flex: none; transition: background-color .15s cubic-bezier(.22,1,.36,1); }
+  .btn.ok .dot { background: #15803d; }
+  .menu { box-sizing: border-box; min-width: 256px; max-width: 320px; max-height: min(360px, 60vh); overflow-y: auto;
+    padding: 4px; border-radius: 12px; background: #19191b;
+    box-shadow: 0 8px 24px rgba(0,0,0,.24), inset 0 0 0 1px rgba(237,237,237,.08); }
   .menu[hidden] { display: none; }
-  .title { padding: 6px 8px 8px; font-weight: 600; font-size: 12px; color: rgba(255,255,255,.7);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid rgba(255,255,255,.08);
-    margin-bottom: 4px; }
-  .item { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 10px; width: 100%;
-    padding: 8px 10px; border-radius: 9px; cursor: pointer; }
-  .item:hover, .item:focus-visible { background: rgba(255,255,255,.1); }
-  .item .l { font-weight: 600; min-width: 64px; }
-  .item .d { flex: 1; text-align: right; color: rgba(255,255,255,.62); font-size: 12px;
-    font-feature-settings: "tnum"; }
-  .chip { font-size: 10px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
-    color: #99c1f1; background: rgba(53,132,228,.22); padding: 2px 6px; border-radius: 99px; }
-  .note { padding: 10px; color: rgba(255,255,255,.75); font-size: 12px; line-height: 1.45; }
+  .title { padding: 8px; margin-bottom: 4px; font-weight: 400; font-size: 12px; line-height: 16px; color: #a1a1a6;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid rgba(237,237,237,.08); }
+  .item { all: unset; box-sizing: border-box; display: flex; align-items: center; gap: 8px; width: 100%;
+    min-height: 36px; padding: 8px; border-radius: 8px; cursor: pointer;
+    transition: background-color .15s cubic-bezier(.22,1,.36,1); }
+  .item.pref { background: #232325; }
+  .item:hover { background: rgba(237,237,237,.08); }
+  .item:focus-visible { outline: 2px solid #62a0ea; outline-offset: -2px; }
+  .item .l { white-space: nowrap; }
+  .item .d { flex: 1; min-width: 0; text-align: right; color: #a1a1a6; white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; font: 400 12px/16px ui-monospace, "JetBrains Mono", "DejaVu Sans Mono", monospace;
+    font-variant-numeric: tabular-nums; }
+  .chip { font-weight: 400; font-size: 12px; line-height: 16px; color: #85858b; }
+  .note { padding: 8px; color: #a1a1a6; font-weight: 400; font-size: 12px; line-height: 16px; }
   .spin { display: inline-block; width: 12px; height: 12px; border-radius: 50%; vertical-align: -2px;
-    margin-right: 8px; border: 2px solid rgba(255,255,255,.25); border-top-color: #fff;
+    margin-right: 8px; border: 2px solid rgba(237,237,237,.2); border-top-color: #ededed;
     animation: r .8s linear infinite; }
   @keyframes r { to { transform: rotate(360deg); } }
-  .sep { height: 1px; background: rgba(255,255,255,.08); margin: 4px 6px; }
+  .sep { height: 1px; background: rgba(237,237,237,.08); margin: 4px 8px; }
 </style>
 <div class="wrap" part="wrap">
   <button class="btn" type="button" title="Download with Haul"><span class="dot">${ICON}</span><span class="lbl">Download</span></button>
@@ -390,8 +393,8 @@
       const size = v.size + (v.muxed ? 0 : audioSize);
       return { id: "h" + h, label: h + "p" + tag, detail: [mp4 ? "MP4" : "Best format", human(size)].filter(Boolean).join(" · ") };
     });
-    options.push({ id: "audio_mp3", label: "Audio", detail: ["MP3", human(audioSize)].filter(Boolean).join(" · ") });
-    options.push({ id: "audio_best", label: "Audio", detail: "original format (M4A/Opus)" });
+    options.push({ id: "audio_mp3", label: "MP3", detail: human(audioSize) || "audio only" });
+    options.push({ id: "audio_best", label: "Original audio", detail: "M4A or Opus" });
     const url = new URL(location.href);
     const page = url.pathname.startsWith("/shorts/") ? location.href
       : "https://www.youtube.com/watch?v=" + d.id;
@@ -500,7 +503,7 @@
     b.type = "button";
     b.setAttribute("role", "menuitem");
     b.append(el("span", "l", l));
-    if (preferred) b.append(el("span", "chip", "Preferred"));
+    if (preferred) { b.classList.add("pref"); b.append(el("span", "chip", "Preferred")); }
     b.append(el("span", "d", d || ""));
     b.addEventListener("click", e => { if (e.isTrusted) { e.stopPropagation(); onClick(); } });
     return b;

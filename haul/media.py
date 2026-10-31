@@ -213,10 +213,10 @@ def choices(info, prefer_mp4=True):
             tag = " 4K" if h == 2160 else " HD" if h >= 720 else ""
             out.append({"id": key, "label": f"{h}p{tag}", "detail": " · ".join(x for x in (container, human(size)) if x)})
         elif key == "audio_mp3":
-            out.append({"id": key, "label": "Audio", "detail": " · ".join(x for x in ("MP3", human(info.get("audio_size"))) if x)})
+            out.append({"id": key, "label": "MP3", "detail": human(info.get("audio_size")) or "audio only"})
     if not out:
         out.append({"id": "best", "label": "Best quality", "detail": container})
-    out.append({"id": "audio_best", "label": "Audio", "detail": "original format (M4A/Opus)"})
+    out.append({"id": "audio_best", "label": "Original audio", "detail": "M4A or Opus"})
     return out
 
 

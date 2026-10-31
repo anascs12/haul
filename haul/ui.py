@@ -11,9 +11,10 @@ import gi
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 gi.require_version("GdkPixbuf", "2.0")
-from gi.repository import Adw, Gdk, GdkPixbuf, Gio, GLib, GObject, Gtk, Pango  # noqa: E402
+gi.require_version("Graphene", "1.0")
+from gi.repository import Adw, Gdk, GdkPixbuf, Gio, GLib, GObject, Graphene, Gtk, Pango  # noqa: E402
 
-from . import APP_ID, __version__, integration, media, paths, probe, tools  # noqa: E402
+from . import APP_ID, __version__, integration, media, paths, probe, segments, tools  # noqa: E402
 from .jobs import EXT_CATEGORY, Manager, torrent_options, _log  # noqa: E402
 from .server import IPCServer  # noqa: E402
 from .settings import Settings  # noqa: E402
@@ -22,9 +23,9 @@ URL_RE = re.compile(r"(?:https?|ftps?|sftp)://[^\s<>\"']+|magnet:\?[^\s<>\"']+",
 
 CSS = b"""
 .job-status { font-feature-settings: "tnum"; }
-.job-row { padding: 10px 12px; }
+.job-row { padding: 12px; }
 .job-row progressbar trough, .job-row progressbar progress { min-height: 6px; border-radius: 3px; }
-.filter-bar { padding: 6px 12px 0 12px; }
+.filter-bar { padding: 8px 12px 0 12px; }
 """
 
 
@@ -112,6 +113,66 @@ def file_icon(widget, gicon, size=32):
     return paintable
 
 
+# ---------------------------------------------------------------- segment map
+
+class SegmentMap(Gtk.Widget):
+    """The load filling up: one cell per group of pieces, lit as each connection delivers them.
+
+    aria2 only reports a piece once all of it has arrived, so a thin line under the
+    cells shows the exact overall progress and the map never looks behind the numbers.
+    """
+
+    GAP = 1
+    LINE = 2
+
+    def __init__(self, height, cell):
+        super().__init__(hexpand=True, visible=False)
+        self.height, self.cell = height, cell
+        self.bitfield, self.pieces, self.fraction = "", 0, 0.0
+
+    def set_pieces(self, bitfield, pieces, fraction):
+        if (bitfield, pieces, fraction) != (self.bitfield, self.pieces, self.fraction):
+            self.bitfield, self.pieces, self.fraction = bitfield, pieces, fraction
+            self.queue_draw()
+
+    def do_measure(self, orientation, for_size):
+        if orientation == Gtk.Orientation.VERTICAL:
+            return self.height, self.height, -1, -1
+        return 40, 40, -1, -1
+
+    def do_snapshot(self, snapshot):
+        width = self.get_width()
+        lit = segments.cells(self.bitfield, self.pieces, (width + self.GAP) // (self.cell + self.GAP))
+        if not lit:
+            return
+        accent = Adw.StyleManager.get_default().get_accent_color_rgba()
+        empty = self.get_color()
+        empty.alpha = 0.12
+        step = (width + self.GAP) / len(lit)
+        for i, fraction in enumerate(lit):
+            color = empty
+            if fraction:
+                color = accent.copy()
+                color.alpha = 0.4 + 0.6 * fraction
+            rect = Graphene.Rect().init(round(i * step), 0, round((i + 1) * step) - round(i * step) - self.GAP,
+                                        self.height - self.LINE - self.GAP)
+            snapshot.append_color(color, rect)
+        line_top = self.height - self.LINE
+        snapshot.append_color(empty, Graphene.Rect().init(0, line_top, width, self.LINE))
+        snapshot.append_color(accent, Graphene.Rect().init(0, line_top, round(width * self.fraction), self.LINE))
+
+
+def show_progress(bar, cells_map, job, fraction):
+    """The segment map when aria2 reports pieces, a plain bar for everything else."""
+    active = job["status"] != "done"
+    has_map = active and bool(job["bitfield"]) and job["pieces"] > 0
+    cells_map.set_visible(has_map)
+    if has_map:
+        cells_map.set_pieces(job["bitfield"], job["pieces"], fraction)
+    bar.set_visible(active and not has_map)
+    bar.set_fraction(fraction)
+
+
 # ---------------------------------------------------------------- rows
 
 class DownloadRow(Gtk.ListBoxRow):
@@ -128,11 +189,12 @@ class DownloadRow(Gtk.ListBoxRow):
         self.title = Gtk.Label(xalign=0, ellipsize=Pango.EllipsizeMode.MIDDLE)
         self.title.add_css_class("heading")
         self.bar = Gtk.ProgressBar()
+        self.map = SegmentMap(8, 4)
         self.status = Gtk.Label(xalign=0, ellipsize=Pango.EllipsizeMode.END)
         self.status.add_css_class("caption")
         self.status.add_css_class("dim-label")
         self.status.add_css_class("job-status")
-        for w in (self.title, self.bar, self.status):
+        for w in (self.title, self.bar, self.map, self.status):
             mid.append(w)
         box.append(mid)
 
@@ -190,8 +252,7 @@ class DownloadRow(Gtk.ListBoxRow):
             self.icon.set_from_paintable(file_icon(self, icon))
         size, done = job["size"], job["done"]
         frac = min(1.0, done / size) if size else 0.0
-        self.bar.set_fraction(1.0 if st == "done" else frac)
-        self.bar.set_visible(st != "done")
+        show_progress(self.bar, self.map, job, frac)
         progress = f"{human_size(done)} of {human_size(size)}" if size else human_size(done)
         self.status.remove_css_class("error")
         if st == "active":
@@ -220,7 +281,7 @@ class DownloadRow(Gtk.ListBoxRow):
             finished = time.strftime("%H:%M", time.localtime(job["finished"])) if job["finished"] else ""
             text = " · ".join(x for x in (human_size(size or done), "Done " + finished,
                                           job["detail"]) if x.strip())
-            icon, tip = "document-open-symbolic", "Open"
+            icon, tip = "haul-open-symbolic", "Open"
         self.status.set_label(text)
         self.status.set_tooltip_text(text)
         self.main_btn.set_icon_name(icon)
@@ -625,8 +686,8 @@ class ProgressWindow(Adw.Window):
         header.set_title_widget(self.wtitle)
         view.add_top_bar(header)
 
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, margin_top=4,
-                      margin_bottom=18, margin_start=18, margin_end=18)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin_top=4,
+                      margin_bottom=16, margin_start=16, margin_end=16)
         top = Gtk.Box(spacing=12)
         self.icon = Gtk.Image(pixel_size=40, valign=Gtk.Align.CENTER)
         top.append(self.icon)
@@ -642,6 +703,9 @@ class ProgressWindow(Adw.Window):
         box.append(top)
         self.bar = Gtk.ProgressBar(margin_top=4)
         box.append(self.bar)
+        self.map = SegmentMap(16, 6)
+        self.map.set_margin_top(4)
+        box.append(self.map)
         self.line1 = Gtk.Label(xalign=0, wrap=True)
         self.line1.add_css_class("job-status")
         self.line2 = Gtk.Label(xalign=0, ellipsize=Pango.EllipsizeMode.END)
@@ -683,8 +747,7 @@ class ProgressWindow(Adw.Window):
             self.icon.set_from_paintable(file_icon(self, icon, 40))
         size, done = job["size"], job["done"]
         frac = min(1.0, done / size) if size else 0.0
-        self.bar.set_fraction(frac)
-        self.bar.set_visible(st != "done")
+        show_progress(self.bar, self.map, job, frac)
         pct = f" ({frac * 100:.0f}%)" if size else ""
         amount = f"{human_size(done)} of {human_size(size)}{pct}" if size else human_size(done)
         self.line1.remove_css_class("error")
@@ -1050,7 +1113,7 @@ class MainWindow(Adw.ApplicationWindow):
         btn.set_action_name("app.add")
         empty.set_child(btn)
         self.stack.add_named(empty, "empty")
-        self.nothing = Adw.StatusPage(icon_name="edit-find-symbolic", title="Nothing here")
+        self.nothing = Adw.StatusPage(icon_name="folder-download-symbolic")
         self.stack.add_named(self.nothing, "nothing")
 
         self.list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE, valign=Gtk.Align.START)
@@ -1097,6 +1160,7 @@ class MainWindow(Adw.ApplicationWindow):
         self.list.invalidate_filter()
         visible = [j for j in jobs if self.FILTERS[self.filter](j)]
         self.filter_bar.set_visible(bool(jobs))
+        self.nothing.set_title("No finished downloads" if self.filter == "done" else "Nothing in progress")
         self.stack.set_visible_child_name("list" if visible else ("nothing" if jobs else "empty"))
         active, speed = sum(1 for j in jobs if j["status"] == "active"), sum(j["speed"] for j in jobs)
         waiting = sum(1 for j in jobs if j["status"] == "queued")
